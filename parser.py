@@ -301,41 +301,39 @@ def format_mail(list_movie, list_movie_discarded):
         html_content += "<h2>SELECTED TORRENTS :</h2>"
         html_content += "------------------------------------------------------------------"
 
-        for title, properties in list_movie.iteritems():
+        for title, torrent_property_list in list_movie.iteritems():
 
-            if properties['imdb_title'] != "" and properties['trust_imdb']:
-                text_content += "\n" + properties['imdb_title'].upper() + "\n"
-                html_content += "<h3>" + properties['imdb_title'] + "</h3>"
+            common_properties = torrent_property_list[0]
+
+            if common_properties['imdb_title'] != "" and common_properties['trust_imdb']:
+                text_content += "\n" + common_properties['imdb_title'].upper() + "\n"
+                html_content += "<h3>" + common_properties['imdb_title'] + "</h3>"
             else:
-                text_content += "\n" + properties['title'].upper() + "\n"
-                html_content += "<h3>" + properties['title'] + "</h3>"
+                text_content += "\n" + common_properties['title'].upper() + "\n"
+                html_content += "<h3>" + common_properties['title'] + "</h3>"
 
-            if 'year' in properties:
-                text_content += "Year : " + properties['year'] + "\n"
-                html_content += "Year : " + properties['year'] + "<br>"
-            if 'lan' in properties:
-                text_content += "Language : " + properties['lan'] + "\n"
-                html_content += "Language : " + properties['lan'] + "<br>"
+            if 'year' in common_properties:
+                text_content += "Year : " + common_properties['year'] + "\n"
+                html_content += "Year : " + common_properties['year'] + "<br>"
 
-            text_content += "Torrent : " + properties['torrent_file_url'] + "\n"
-            html_content += "Torrent : <a href=\"" + properties['torrent_file_url'] + "\">" + properties['torrent_title'] + "</a><br>"
-
-            if properties['imdb_title'] != "":
+            if common_properties['imdb_title'] != "":
 
                 text_content += "\n"
                 text_content += "IMDB :\n"
-                text_content += properties['imdb_title'] + " (" + properties['imdb_url'] + ")\n"
-                text_content += "Rating : " + str(properties['rating']) + "\n"
-                text_content += properties['imdb_plot'].strip()
-                text_content += "\n"
+                text_content += common_properties['imdb_title'] + " (" + common_properties['imdb_url'] + ")\n"
+                text_content += "Rating : " + str(common_properties['rating']) + "\n"
+                if common_properties['imdb_plot'].strip() != "":
+                    text_content += common_properties['imdb_plot'].strip()
+                    text_content += "\n"
 
                 html_content += "<br>"
-                html_content += "<a href=\"" + properties['imdb_url'] + "\">IMDB Rating : " + str(properties['rating']) + "</a><br>"
-                html_content += "<img src=\"" + properties['imdb_cover_url'] + "\">"
-                html_content += properties['imdb_plot'].strip()
-                html_content += "<br>"
+                html_content += "<a href=\"" + common_properties['imdb_url'] + "\">IMDB Rating : " + str(common_properties['rating']) + "</a><br>"
+                html_content += "<img src=\"" + common_properties['imdb_cover_url'] + "\">"
+                if common_properties['imdb_plot'].strip() != "":
+                    html_content += common_properties['imdb_plot'].strip()
+                    html_content += "<br>"
 
-                if not properties['trust_imdb']:
+                if not common_properties['trust_imdb']:
                     text_content += "\n"
                     text_content += "*** WARNING : Approximate IMDB match ***\n"
 
@@ -348,6 +346,21 @@ def format_mail(list_movie, list_movie_discarded):
 
                 html_content += "<br>"
                 html_content += "NO IMDB MATCH FOUND<br>"
+
+            for torrent_properties in torrent_property_list:
+                text_content += "\n"
+                html_content += "<br>"
+
+                text_content += "Torrent : " + torrent_properties['torrent_file_url'] + "\n"
+                html_content += "Torrent : <a href=\"" + torrent_properties['torrent_file_url'] + "\">" + torrent_properties['torrent_title'] + "</a><br>"
+
+                if torrent_properties['size'] is not None:
+                    text_content += "Size : " + " ".join(torrent_properties['size']) + "\n"
+                    html_content += "Size : " + " ".join(torrent_properties['size']) + "<br>"
+
+                if 'lan' in torrent_properties:
+                    text_content += "Language : " + torrent_properties['lan'] + "\n"
+                    html_content += "Language : " + torrent_properties['lan'] + "<br>"
 
             text_content += "\n------------------------------------------------------------------\n"
             html_content += "<br>------------------------------------------------------------------<br>"
@@ -369,6 +382,7 @@ def format_mail(list_movie, list_movie_discarded):
         html_content += "<h2>DISCARDED TORRENTS :</h2>"
 
         for title, properties in list_movie_discarded.iteritems():
+
             text_content += properties['torrent_title'] + " (" + properties['torrent_file_url'] + ")\n"
             text_content += properties['discard'] + "\n"
             text_content += "\n"
@@ -465,9 +479,6 @@ def main(file_config=None):
 
         print "Torrent title : " + unicode(torrent_title)
 
-        # for key, value in entry.iteritems():
-        #     print "     " + str(key) + " : " + unicode(value)
-
         pos = 0
         properties = dict()
         has_title = False
@@ -515,9 +526,7 @@ def main(file_config=None):
                                                         + ' - ' \
                                                         + properties['imdb_url']
                         else:
-                            properties['discard'] = 'Already in the list of discarded movies'
-                    else:
-                        properties['discard'] = 'Torrent already included in the list of selected movies'
+                            properties['discard'] = 'Dummy text not used'
                 else:
                     properties['discard'] = 'Hindi movie'
             else:
@@ -528,8 +537,23 @@ def main(file_config=None):
 
         properties['torrent_title'] = torrent_title
         properties['torrent_file_url'] = torrent_file_url
+
+        try:
+            byte_length = int(entry['torrent_contentlength'])
+            mb = byte_length / (1024*1024)
+            if mb > 1024:
+                gb = round(mb/float(1024), 2)
+                properties['size'] = (str(gb), 'GB')
+            else:
+                properties['size'] = (str(mb), 'MB')
+        except:
+            properties['size'] = None
+
         if not 'discard' in properties:
-            list_movie[properties['title']] = properties
+            if not properties['title'] in list_movie:
+                list_torrent = []
+                list_movie[properties['title']] = list_torrent
+            list_movie[properties['title']].append(properties)
         else:
             if not torrent_title in list_movie_discarded:
                 list_movie_discarded[torrent_title] = properties
