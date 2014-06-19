@@ -1,6 +1,7 @@
 __author__ = 'mcharbit'
 
 from feedparser import parse
+from sys import argv
 import re
 import os
 import smtplib
@@ -431,9 +432,9 @@ def send_mail(text_content, html_content, file_config=None):
                     with open(file_config, 'rb') as fd:
                         config = pickle.load(fd)
                 except:
-                    print file_config + "is not a valid config file"
+                    print file_config + " is not a valid config file"
             else:
-                print file_config + "is not a valid path"
+                print file_config + " is not a valid path"
 
         if not (config.has_key('username')
                 and config.has_key('smtp_server')
@@ -447,12 +448,12 @@ def send_mail(text_content, html_content, file_config=None):
         outer_message['Subject'] = 'Mail from RSS Parser'
         outer_message['From'] = config['from']
         outer_message['To'] = config['to']
-        if len(text_content) > 0:
-            text_message = MIMEText(text_content, 'plain', 'utf-8')
-            outer_message.attach(text_message)
         if len(html_content) > 0:
             html_message = MIMEText(html_content, 'html', 'utf-8')
             outer_message.attach(html_message)
+        if len(text_content) > 0:
+            text_message = MIMEText(text_content, 'plain', 'utf-8')
+            # outer_message.attach(text_message)
 
         server = smtplib.SMTP(config['smtp_server'])
 
@@ -466,7 +467,12 @@ def send_mail(text_content, html_content, file_config=None):
         finally:
             server.close()
 
-def main(file_config=None):
+def main():
+
+    if len(argv) > 1:
+        file_config = argv[1]
+    else:
+        file_config = None
 
     list_movie = dict()
     list_movie_discarded = dict()
@@ -477,7 +483,11 @@ def main(file_config=None):
         torrent_title = entry['title']
         torrent_file_url = entry['links'][1]['href']
 
-        print "Torrent title : " + unicode(torrent_title)
+        try:
+            print "Torrent title : " + unicode(torrent_title)
+        except UnicodeEncodeError:
+            ascii_title = unicodedata.normalize('NFKD', torrent_title).encode('ascii', 'ignore')
+            print "Torrent title : " + ascii_title
 
         pos = 0
         properties = dict()
@@ -520,7 +530,7 @@ def main(file_config=None):
                         if not torrent_title in list_movie_discarded:
                             get_imdb_info(properties)
 
-                            if properties['trust_imdb'] and properties['rating'] < 7:
+                            if properties['trust_imdb'] and properties['rating'] < 6.5:
                                 properties['discard'] = 'Bad IMDB rating : ' \
                                                         + str(properties['rating']) \
                                                         + ' - ' \
@@ -561,7 +571,5 @@ def main(file_config=None):
     html_content, text_content = format_mail(list_movie, list_movie_discarded)
     send_mail(text_content, html_content, file_config)
 
-file_config = "config.txt"
-main(file_config)
-# send_mail("test", "", file_config)
-
+if __name__ == "__main__":
+    main()
