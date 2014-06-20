@@ -1,0 +1,11 @@
+Metadata-Version: 1.0
+Name: MovieTorrentParser
+Version: 0.1.0
+Summary: Handy movie torrent parser
+Home-page: UNKNOWN
+Author: mcharbit
+Author-email: mcharbit@pentalog.fr
+License: GPL
+Description: Handy parser going through RSS provided by torrent sites, selecting movies with proper encoding and IMDB rating and send digest by mail
+        
+Platform: UNKNOWN
