@@ -1,0 +1,15 @@
+To install directly from github repo:
+
+    pip install git+https://github.com/atadlate/movie_torrent_parser.git#egg=MovieTorrentParser
+
+Warning : IMDbPy depends on lxml. lxml can't compile unless libxml2-dev and libxslt-devel are installed.
+(Refer to http://lxml.de/installation.html for more information)
+
+You can :
+
+    - Install these packages manually (from http://xmlsoft.org/downloads.html)
+    - Or run : STATIC_DEPS=true CFLAGS=-fPIC pip install lmxl
+
+prior to installing MovieTorrentParser
+
+pip should handle correctly other dependencies
