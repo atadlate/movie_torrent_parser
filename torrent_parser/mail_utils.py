@@ -184,7 +184,7 @@ def get_config():
                 with open(file_config, 'rb') as fd:
                     config = pickle.load(fd)
             except:
-                console_log("Error opening config file " + file_config)
+                console_log("*** Error opening config file " + file_config)
         else:
             console_log(file_config + " is not a valid path")
 
@@ -238,9 +238,9 @@ def process_report(text_content, html_content):
             server = smtplib.SMTP(config['smtp_server'])
             server_connected = True
         except:
-            console_log("Unexpected error while connecting to mail server :" + str(sys.exc_info()[0]) + "\n")
-            console_log("Printing report to console\n")
             console_log("\n")
+            console_log("*** Unexpected error while connecting to mail server :" + str(sys.exc_info()[0]))
+            console_log("Printing report to console\n")
             console_log(text_content)
 
         if server_connected:
@@ -252,9 +252,9 @@ def process_report(text_content, html_content):
                 server.quit()
                 console_log("Report sent by mail\n")
             except:
-                console_log("Unexpected error while sending mail :" + str(sys.exc_info()[0]) + "\n")
-                console_log("Printing report to console\n")
                 console_log("\n")
+                console_log("*** Unexpected error while sending mail :" + str(sys.exc_info()[0]))
+                console_log("Printing report to console\n")
                 console_log(text_content)
             finally:
                 server.close()

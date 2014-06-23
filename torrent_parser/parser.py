@@ -5,6 +5,7 @@ import sys
 import re
 import signal
 from time import sleep
+from collections import OrderedDict
 import threading
 
 import unicodedata
@@ -14,17 +15,13 @@ from imdb.helpers import akasLanguages
 
 import mail_utils
 
-feed_url = "http://kickass.to/movies/?rss=1"
-
-# feed_url = "http://www.limetorrents.com/rss/16/"
-
-# feed_url = "http://rss.thepiratebay.se/201"
-# "http://rss.thepiratebay.se/202"
-# "http://rss.thepiratebay.se/207"
-
-
-
-imdb_title_search_url = "http://www.imdb.com/xml/find?json=1&nr=1&tt=on&q="
+feed_urls = [
+    "http://www.limetorrents.com/rss/16/",
+    "http://kickass.to/movies/?rss=1",
+# "http://rss.thepiratebay.se/201",
+# "http://rss.thepiratebay.se/202",
+# "http://rss.thepiratebay.se/207",
+    ]
 
 title_specification = [
     ('SEP1',  r'\[.+?\]'),
@@ -129,6 +126,13 @@ def analyze_filename_content(parsed_string, pos=0, has_title=False, inside_sep=F
 
     return param_tuple, pos, has_title
 
+def comparing_title(title):
+    aka_title = unicodedata.normalize('NFKD', title).encode('ascii', 'ignore')
+    aka_title = re.sub(r'\s|3D|\!|\?|\.|\(|\)|\-|\:|\,|\"|\&|\'', '', aka_title)
+    aka_title = aka_title.lower()
+
+    return aka_title
+
 def match_AKA(ia, movie_title, dict_to_check):
 
     movie_match = None
@@ -140,16 +144,21 @@ def match_AKA(ia, movie_title, dict_to_check):
 
         for movie_ID, movie_obj in dict_to_check.iteritems():
             if movie_match is None:
-                ia.update(movie_obj)
-                akas_tuple = akasLanguages(movie_obj)
 
-                for lang, aka_title in akas_tuple:
-                    aka_title = unicodedata.normalize('NFKD', aka_title).encode('ascii', 'ignore')
-                    aka_title = re.sub(r'\s|3D|\!|\?|\.|\(|\)|\-|\:|\,|\"|\&|\'', '', aka_title)
-                    aka_title = aka_title.lower()
-                    if aka_title == torrent_simple_title:
-                        movie_match = movie_obj
-                        break
+                if movie_obj.has_key('akas'):
+                    for aka_title in movie_obj['akas']:
+                        if comparing_title(aka_title) == torrent_simple_title:
+                            movie_match = movie_obj
+                            break
+
+                else:
+                    ia.update(movie_obj)
+                    akas_tuple = akasLanguages(movie_obj)
+
+                    for lang, aka_title in akas_tuple:
+                        if comparing_title(aka_title) == torrent_simple_title:
+                            movie_match = movie_obj
+                            break
 
     return movie_match
 
@@ -160,8 +169,8 @@ def get_imdb_info(properties):
     except:
         return
 
-    year_matches = dict()
-    title_matches = dict()
+    year_matches = OrderedDict()
+    title_matches = OrderedDict()
     movie_obj = None
     trust_id = False
     perfect_match = None
@@ -307,104 +316,105 @@ def parse_feed():
     execution_log = StringIO()
     first_print = True
 
-    results = parse(feed_url)
-    for entry in results['entries']:
+    for feed_url in feed_urls:
+        results = parse(feed_url)
+        for entry in results['entries']:
 
-        torrent_title = entry['title']
-        torrent_file_url = entry['links'][1]['href']
+            torrent_title = entry['title']
+            torrent_file_url = entry['links'][1]['href']
 
-        # Delay console prints if user is prompted for configuration
-        if not mail_utils.config_ok:
-            execution_log.write("Processing : " + torrent_title)
-        else:
-            if first_print:
-                previous_logs = execution_log.getvalue()
-                execution_log.close()
-
-                if len(previous_logs) > 0:
-                    mail_utils.console_log(previous_logs)
-                first_print = False
-
-            mail_utils.console_log("Processing : " + torrent_title)
-
-        pos = 0
-        properties = dict()
-        has_title = False
-        while pos < len(torrent_title)-1:
-            data, pos, has_title = analyze_filename_content(torrent_title, pos, has_title)
-            key = data[0].lower()
-            value = data[1]
-            value = re.sub(r'_|\.', r' ', value)
-            if key in properties:
-                if key in ['misc', 'tag', 'lan']:
-                    properties[key] += " " + unicode(value.strip())
+            # Delay console prints if user is prompted for configuration
+            if not mail_utils.config_ok:
+                execution_log.write("Processing : " + torrent_title)
             else:
-                properties[key] = unicode(value.strip())
+                if first_print:
+                    previous_logs = execution_log.getvalue()
+                    execution_log.close()
 
-        if entry.has_key("summary"):
-            summary = entry['summary']
+                    if len(previous_logs) > 0:
+                        mail_utils.console_log(previous_logs)
+                    first_print = False
+
+                mail_utils.console_log("Processing : " + torrent_title)
 
             pos = 0
-            tmp_dict = dict()
-            while pos < len(summary)-1:
-                data, pos = analyze_summary_content(summary, pos)
-                if data != ():
-                    key = data[0].lower()
-                    value = data[1]
-                    tmp_dict[key] = unicode(value.strip())
-
-            if tmp_dict.has_key('rating') and tmp_dict.has_key('title') and tmp_dict.has_key('year'):
-                # A torrent whose summary has all 3 information above is considered reliable. Consider these data
-                # rather than data extracted from torrent's name
-                for key, value in tmp_dict.iteritems():
-                    properties[key] = value
-
-                properties['trust_imdb'] = True
-
-        if 'title' in properties:
-            if 'rip' in properties:
-                if 'lan' not in properties or re.search('hindi', properties['lan'].lower()) is None:
-                    if not properties['title'] in list_movie:
-                        if not torrent_title in list_movie_discarded:
-                            get_imdb_info(properties)
-
-                            if properties['trust_imdb'] and properties['rating'] < 6.5:
-                                properties['discard'] = 'Bad IMDB rating : ' \
-                                                        + str(properties['rating']) \
-                                                        + ' - ' \
-                                                        + properties['imdb_url']
-                        else:
-                            properties['discard'] = 'Dummy text not used'
+            properties = dict()
+            has_title = False
+            while pos < len(torrent_title)-1:
+                data, pos, has_title = analyze_filename_content(torrent_title, pos, has_title)
+                key = data[0].lower()
+                value = data[1]
+                value = re.sub(r'_|\.', r' ', value)
+                if key in properties:
+                    if key in ['misc', 'tag', 'lan']:
+                        properties[key] += " " + unicode(value.strip())
                 else:
-                    properties['discard'] = 'Hindi movie'
+                    properties[key] = unicode(value.strip())
+
+            if entry.has_key("summary"):
+                summary = entry['summary']
+
+                pos = 0
+                tmp_dict = dict()
+                while pos < len(summary)-1:
+                    data, pos = analyze_summary_content(summary, pos)
+                    if data != ():
+                        key = data[0].lower()
+                        value = data[1]
+                        tmp_dict[key] = unicode(value.strip())
+
+                if tmp_dict.has_key('rating') and tmp_dict.has_key('title') and tmp_dict.has_key('year'):
+                    # A torrent whose summary has all 3 information above is considered reliable. Consider these data
+                    # rather than data extracted from torrent's name
+                    for key, value in tmp_dict.iteritems():
+                        properties[key] = value
+
+                    properties['trust_imdb'] = True
+
+            if 'title' in properties:
+                if 'rip' in properties:
+                    if 'lan' not in properties or re.search('hindi', properties['lan'].lower()) is None:
+                        if not properties['title'] in list_movie:
+                            if not torrent_title in list_movie_discarded:
+                                get_imdb_info(properties)
+
+                                if properties['trust_imdb'] and properties['rating'] < 6.5:
+                                    properties['discard'] = 'Bad IMDB rating : ' \
+                                                            + str(properties['rating']) \
+                                                            + ' - ' \
+                                                            + properties['imdb_url']
+                            else:
+                                properties['discard'] = 'Dummy text not used'
+                    else:
+                        properties['discard'] = 'Hindi movie'
+                else:
+                    properties['discard'] = 'Not a rip'
             else:
-                properties['discard'] = 'Not a rip'
-        else:
-            properties['discard'] = 'No title found in torrent\'s name'
-            properties['title'] = torrent_title
+                properties['discard'] = 'No title found in torrent\'s name'
+                properties['title'] = torrent_title
 
-        properties['torrent_title'] = torrent_title
-        properties['torrent_file_url'] = torrent_file_url
+            properties['torrent_title'] = torrent_title
+            properties['torrent_file_url'] = torrent_file_url
 
-        try:
-            byte_length = int(entry['torrent_contentlength'])
-            mb = byte_length / (1024*1024)
-            if mb > 1024:
-                gb = round(mb/float(1024), 2)
-                properties['size'] = (str(gb), 'GB')
+            try:
+                byte_length = int(entry['torrent_contentlength'])
+                mb = byte_length / (1024*1024)
+                if mb > 1024:
+                    gb = round(mb/float(1024), 2)
+                    properties['size'] = (str(gb), 'GB')
+                else:
+                    properties['size'] = (str(mb), 'MB')
+            except:
+                properties['size'] = None
+
+            if not 'discard' in properties:
+                if not properties['title'] in list_movie:
+                    list_torrent = []
+                    list_movie[properties['title']] = list_torrent
+                list_movie[properties['title']].append(properties)
             else:
-                properties['size'] = (str(mb), 'MB')
-        except:
-            properties['size'] = None
-
-        if not 'discard' in properties:
-            if not properties['title'] in list_movie:
-                list_torrent = []
-                list_movie[properties['title']] = list_torrent
-            list_movie[properties['title']].append(properties)
-        else:
-            if not torrent_title in list_movie_discarded:
-                list_movie_discarded[torrent_title] = properties
+                if not torrent_title in list_movie_discarded:
+                    list_movie_discarded[torrent_title] = properties
 
     html_content, text_content = mail_utils.format_report(list_movie, list_movie_discarded)
     mail_utils.process_report(text_content, html_content)
