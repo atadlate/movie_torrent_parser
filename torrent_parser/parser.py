@@ -1,15 +1,29 @@
 __author__ = 'mcharbit'
 
 from feedparser import parse
-from sys import argv
+import sys
 import re
+import signal
+from time import sleep
+import threading
 
 import unicodedata
+from StringIO import StringIO
 from imdb import IMDb
 from imdb.helpers import akasLanguages
-from mail_utils import format_mail, send_mail
+
+import mail_utils
 
 feed_url = "http://kickass.to/movies/?rss=1"
+
+# feed_url = "http://www.limetorrents.com/rss/16/"
+
+# feed_url = "http://rss.thepiratebay.se/201"
+# "http://rss.thepiratebay.se/202"
+# "http://rss.thepiratebay.se/207"
+
+
+
 imdb_title_search_url = "http://www.imdb.com/xml/find?json=1&nr=1&tt=on&q="
 
 title_specification = [
@@ -280,16 +294,18 @@ def get_imdb_info(properties):
 
     return
 
+def signal_handler(signum, frame):
 
-def main():
+    if mail_utils.server_connected:
+        mail_utils.server.close()
+    sys.exit()
 
-    if len(argv) > 1:
-        file_config = argv[1]
-    else:
-        file_config = None
+def parse_feed():
 
     list_movie = dict()
     list_movie_discarded = dict()
+    execution_log = StringIO()
+    first_print = True
 
     results = parse(feed_url)
     for entry in results['entries']:
@@ -297,11 +313,19 @@ def main():
         torrent_title = entry['title']
         torrent_file_url = entry['links'][1]['href']
 
-        try:
-            print "Torrent title : " + unicode(torrent_title)
-        except UnicodeEncodeError:
-            ascii_title = unicodedata.normalize('NFKD', torrent_title).encode('ascii', 'ignore')
-            print "Torrent title : " + ascii_title
+        # Delay console prints if user is prompted for configuration
+        if not mail_utils.config_ok:
+            execution_log.write("Processing : " + torrent_title)
+        else:
+            if first_print:
+                previous_logs = execution_log.getvalue()
+                execution_log.close()
+
+                if len(previous_logs) > 0:
+                    mail_utils.console_log(previous_logs)
+                first_print = False
+
+            mail_utils.console_log("Processing : " + torrent_title)
 
         pos = 0
         properties = dict()
@@ -312,7 +336,7 @@ def main():
             value = data[1]
             value = re.sub(r'_|\.', r' ', value)
             if key in properties:
-                if key in ['misc', 'tag']:
+                if key in ['misc', 'tag', 'lan']:
                     properties[key] += " " + unicode(value.strip())
             else:
                 properties[key] = unicode(value.strip())
@@ -339,7 +363,7 @@ def main():
 
         if 'title' in properties:
             if 'rip' in properties:
-                if ('lan' not in properties or properties['lan'].lower() != 'hindi'):
+                if 'lan' not in properties or re.search('hindi', properties['lan'].lower()) is None:
                     if not properties['title'] in list_movie:
                         if not torrent_title in list_movie_discarded:
                             get_imdb_info(properties)
@@ -382,8 +406,24 @@ def main():
             if not torrent_title in list_movie_discarded:
                 list_movie_discarded[torrent_title] = properties
 
-    html_content, text_content = format_mail(list_movie, list_movie_discarded)
-    send_mail(text_content, html_content, file_config)
+    html_content, text_content = mail_utils.format_report(list_movie, list_movie_discarded)
+    mail_utils.process_report(text_content, html_content)
+
+def main():
+
+    signal.signal(signal.SIGINT, signal_handler)
+
+    tconfig_mail = threading.Thread(target=mail_utils.get_config, args=())
+    tparser = threading.Thread(target=parse_feed, args=())
+
+    tconfig_mail.daemon = True
+    tparser.daemon = True
+
+    tconfig_mail.start()
+    tparser.start()
+
+    while not mail_utils.script_executed:
+        sleep(1)
 
 if __name__ == "__main__":
     main()

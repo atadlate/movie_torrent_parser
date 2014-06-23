@@ -1,12 +1,21 @@
 __author__ = 'mcharbit'
 
 import os
+import sys
 import smtplib
 import pickle
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+import unicodedata
 
-def format_mail(list_movie, list_movie_discarded):
+from email.mime.text import MIMEText
+from time import sleep
+
+script_executed = False
+config_ok = False
+server_connected = False
+server = None
+config = dict()
+
+def format_report(list_movie, list_movie_discarded):
 
     html_content = text_content = unicode()
 
@@ -51,7 +60,8 @@ def format_mail(list_movie, list_movie_discarded):
 
                 html_content += "<br>"
                 html_content += "<a href=\"" + common_properties['imdb_url'] + "\">IMDB Rating : " + str(common_properties['rating']) + "</a><br>"
-                html_content += "<img src=\"" + common_properties['imdb_cover_url'] + "\">"
+                if common_properties['imdb_cover_url'] != "":
+                    html_content += "<img src=\"" + common_properties['imdb_cover_url'] + "\">"
                 if common_properties['imdb_plot'].strip() != "":
                     html_content += common_properties['imdb_plot'].strip()
                     html_content += "<br>"
@@ -125,15 +135,30 @@ def format_mail(list_movie, list_movie_discarded):
 def prompt(prompt):
     return raw_input(prompt).strip()
 
-def get_config(config):
-    if not isinstance(config, dict):
-        raise Exception('Parameter must be an instance of dict')
+def get_config_from_user():
+    global config
 
-    config['from'] = prompt('From: ')
-    config['to'] = prompt('To: ')
-    config['smtp_server'] = prompt('SMTP server: ')
-    config['username'] = prompt('Username: ')
-    config['password'] = prompt('Password: ')
+    console_log("Configuration file not passed to script or invalid.\n")
+    console_log(" => Please enter your preferences\n")
+
+    method = prompt('Would you like the report to be displayed on the console or sent by mail? (console/mail):')
+    if method.lower() == "mail" or method.lower() == "m":
+        config['method'] = 'mail'
+    else:
+        config['method'] = 'console'
+
+    if config['method'] == 'mail':
+        config['from'] = prompt('Mail sent from: ')
+        config['to'] = prompt('Mail sent to: ')
+        config['smtp_server'] = prompt('SMTP server: ')
+        config['username'] = prompt('Username: ')
+        config['password'] = prompt('Password: ')
+        mail_format = prompt('Mail format (text/html):')
+        if mail_format.lower() == 'h' or mail_format.lower() == 'html':
+            config['mail_format'] = 'html'
+        else:
+            config['mail_format'] = 'text'
+
     save = prompt('Would you like to save config to a file ? (Y/N): ')
     if save.lower() == "yes" or save.lower() == "y":
         config_path = prompt('  File path (case sensitive): ')
@@ -141,50 +166,101 @@ def get_config(config):
             with open(config_path, 'wb') as fd:
                 pickle.dump(config, fd)
         except:
-            print " An exception occured. Config not saved to file"
-    print "\n"
+            console_log("   An exception occured. Config not saved to file\n")
+    console_log("\n")
 
-def send_mail(text_content, html_content, file_config=None):
+def get_config():
+    global config
+    global config_ok
 
-    if (len(text_content) > 0 or len(html_content) > 0):
-        config = dict()
-        if file_config is not None:
-            if os.path.exists(file_config):
-                try:
-                    with open(file_config, 'rb') as fd:
-                        config = pickle.load(fd)
-                except:
-                    print file_config + " is not a valid config file"
-            else:
-                print file_config + " is not a valid path"
+    if len(sys.argv) > 1:
+        file_config = sys.argv[1]
+    else:
+        file_config = None
 
-        if not (config.has_key('username')
+    if file_config is not None:
+        if os.path.exists(file_config):
+            try:
+                with open(file_config, 'rb') as fd:
+                    config = pickle.load(fd)
+            except:
+                console_log("Error opening config file " + file_config)
+        else:
+            console_log(file_config + " is not a valid path")
+
+    if config.has_key('method'):
+
+        if config['method'] == 'mail':
+
+            if not (config.has_key('username')
                 and config.has_key('smtp_server')
                 and config.has_key('password')
                 and config.has_key('from')
-                and config.has_key('to')):
-            get_config(config)
+                and config.has_key('to')
+                and config.has_key('mail_format')):
+                    get_config_from_user()
 
-        outer_message = MIMEMultipart()
-        # outer_message = MIMEMultipart('alternative')
-        outer_message['Subject'] = 'Mail from RSS Parser'
-        outer_message['From'] = config['from']
-        outer_message['To'] = config['to']
-        if len(html_content) > 0:
-            html_message = MIMEText(html_content, 'html', 'utf-8')
-            outer_message.attach(html_message)
-        if len(text_content) > 0:
-            text_message = MIMEText(text_content, 'plain', 'utf-8')
-            # outer_message.attach(text_message)
+    else:
+        get_config_from_user()
 
-        server = smtplib.SMTP(config['smtp_server'])
+    config_ok = True
+
+def console_log(text_content):
+    try:
+        print unicode(text_content)
+    except UnicodeEncodeError:
+        ascii_text_content = unicodedata.normalize('NFKD', text_content).encode('ascii', 'ignore')
+        print ascii_text_content
+
+def process_report(text_content, html_content):
+
+    global config
+    global config_ok
+    global script_executed
+    global server_connected
+    global server
+
+    while not config_ok:
+        sleep(1)
+
+    if config['method'] == 'mail':
+
+        if config['mail_format'] == 'html':
+            message = MIMEText(html_content, 'html', 'utf-8')
+        else:
+            message = MIMEText(text_content, 'plain', 'utf-8')
+
+        message['Subject'] = 'Mail from RSS Parser'
+        message['From'] = config['from']
+        message['To'] = config['to']
 
         try:
-            server.ehlo()
-            server.starttls()
-            server.login(config['username'], config['password'])
-            server.sendmail(config['from'], config['to'], outer_message.as_string())
-            server.quit()
+            server = smtplib.SMTP(config['smtp_server'])
+            server_connected = True
+        except:
+            console_log("Unexpected error while connecting to mail server :" + str(sys.exc_info()[0]) + "\n")
+            console_log("Printing report to console\n")
+            console_log("\n")
+            console_log(text_content)
 
-        finally:
-            server.close()
+        if server_connected:
+            try:
+                server.ehlo()
+                server.starttls()
+                server.login(config['username'], config['password'])
+                server.sendmail(config['from'], config['to'], message.as_string())
+                server.quit()
+                console_log("Report sent by mail\n")
+            except:
+                console_log("Unexpected error while sending mail :" + str(sys.exc_info()[0]) + "\n")
+                console_log("Printing report to console\n")
+                console_log("\n")
+                console_log(text_content)
+            finally:
+                server.close()
+
+    else:
+        console_log("\n")
+        console_log(text_content)
+
+    script_executed = True
