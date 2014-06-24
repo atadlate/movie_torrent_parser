@@ -46,54 +46,89 @@ def format_report(list_movie, list_movie_discarded):
 
             if 'year' in common_properties:
                 text_content += "Year : " + common_properties['year'] + "\n"
+                text_content += "\n"
                 html_content += "Year : " + common_properties['year'] + "<br>"
+                html_content += "<br>"
 
             if common_properties['imdb_title'] != "":
 
-                text_content += "\n"
+                # TEXT
                 text_content += "IMDB :\n"
                 text_content += common_properties['imdb_title'] + " (" + common_properties['imdb_url'] + ")\n"
                 text_content += "Rating : " + str(common_properties['rating']) + "\n"
                 if common_properties['imdb_plot'].strip() != "":
                     text_content += common_properties['imdb_plot'].strip()
                     text_content += "\n"
+                if common_properties['imdb_genres'] != "":
+                    text_content += "Genre : " + common_properties['imdb_genres'] + "\n"
+                if common_properties['imdb_directors'] != "":
+                    text_content += "Director : " + common_properties['imdb_directors'] + "\n"
+                if common_properties['imdb_main_cast'] != "":
+                    text_content += "Main cast : " + common_properties['imdb_main_cast'] + "\n"
+                text_content += "\n"
 
-                html_content += "<br>"
+                # HTML
                 html_content += "<a href=\"" + common_properties['imdb_url'] + "\">IMDB Rating : " + str(common_properties['rating']) + "</a><br>"
+                # Create a table, with picture on the left (if provided) and properties on the right.
+                html_content += "<table>"
+
+                open_tr = False
                 if common_properties['imdb_cover_url'] != "":
-                    html_content += "<img src=\"" + common_properties['imdb_cover_url'] + "\">"
+                    # Determine table dim for picture rowspan
+                    list_attributes = ['imdb_genres', 'imdb_directors', 'imdb_main_cast', 'imdb_plot']
+                    nb_row = [1 if common_properties[attribute].strip() != "" else 0 for attribute in list_attributes].count(1) + 1
+                    html_content += "<tr><td rowspan=\"" + str(nb_row) + "\">"
+                    html_content += "<img src=\"" + common_properties['imdb_cover_url'] + "\"></td>"
+                    open_tr = True
+
                 if common_properties['imdb_plot'].strip() != "":
-                    html_content += common_properties['imdb_plot'].strip()
-                    html_content += "<br>"
+                    if not open_tr: html_content += "<tr>"
+                    html_content += "<td>" + common_properties['imdb_plot'].strip() + "</td></tr>"
+                    open_tr = False
+
+                if not open_tr: html_content += "<tr>"
+                html_content += "<td></td></tr>"
+
+                if common_properties['imdb_genres'] != "":
+                    html_content += "<tr><td>Genre : " + common_properties['imdb_genres'] + "</td></tr>"
+                if common_properties['imdb_directors'] != "":
+                    html_content += "<tr><td>Director : " + common_properties['imdb_directors'] + "</td></tr>"
+                if common_properties['imdb_main_cast'] != "":
+                    html_content += "<tr><td>Main cast : " + common_properties['imdb_main_cast'] + "</td></tr>"
+
+                html_content += "</table>"
+                html_content += "<br>"
 
                 if not common_properties['trust_imdb']:
-                    text_content += "\n"
                     text_content += "*** WARNING : Approximate IMDB match ***\n"
 
                     html_content += "<br>"
                     html_content += "<b>*** WARNING : Approximate IMDB match ***</b><br>"
 
             else:
-                text_content += "\n"
                 text_content += "NO IMDB MATCH FOUND\n"
-
-                html_content += "<br>"
-                html_content += "NO IMDB MATCH FOUND<br>"
-
-            for torrent_properties in torrent_property_list:
                 text_content += "\n"
+                html_content += "NO IMDB MATCH FOUND<br>"
                 html_content += "<br>"
 
-                text_content += "Torrent : " + torrent_properties['torrent_file_url'] + "\n"
-                html_content += "Torrent : <a href=\"" + torrent_properties['torrent_file_url'] + "\">" + torrent_properties['torrent_title'] + "</a><br>"
+            list_digest_torrent = []
+            for torrent_properties in torrent_property_list:
 
-                if torrent_properties['size'] is not None:
-                    text_content += "Size : " + " ".join(torrent_properties['size']) + "\n"
-                    html_content += "Size : " + " ".join(torrent_properties['size']) + "<br>"
+                torrent_tuple = (torrent_properties['torrent_title'], torrent_properties['size'])
+                # When RSS feeds are parsed from multple sources, there are
+                if not torrent_tuple in list_digest_torrent:
+                    list_digest_torrent.append(torrent_tuple)
 
-                if 'lan' in torrent_properties:
-                    text_content += "Language : " + torrent_properties['lan'] + "\n"
-                    html_content += "Language : " + torrent_properties['lan'] + "<br>"
+                    text_content += "Torrent : " + torrent_properties['torrent_file_url'] + "\n"
+                    html_content += "Torrent : <a href=\"" + torrent_properties['torrent_file_url'] + "\">" + torrent_properties['torrent_title'] + "</a><br>"
+
+                    if torrent_properties['size'] is not None:
+                        text_content += "Size : " + " ".join(torrent_properties['size']) + "\n"
+                        html_content += "Size : " + " ".join(torrent_properties['size']) + "<br>"
+
+                    if 'lan' in torrent_properties:
+                        text_content += "Language : " + torrent_properties['lan'] + "\n"
+                        html_content += "Language : " + torrent_properties['lan'] + "<br>"
 
             text_content += "\n------------------------------------------------------------------\n"
             html_content += "<br>------------------------------------------------------------------<br>"
@@ -230,7 +265,7 @@ def process_report(text_content, html_content):
         else:
             message = MIMEText(text_content, 'plain', 'utf-8')
 
-        message['Subject'] = 'Mail from RSS Parser'
+        message['Subject'] = 'Movie torrent daily digest'
         message['From'] = config['from']
         message['To'] = config['to']
 

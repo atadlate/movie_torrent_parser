@@ -18,6 +18,7 @@ import mail_utils
 feed_urls = [
     "http://www.limetorrents.com/rss/16/",
     "http://kickass.to/movies/?rss=1",
+
 # "http://rss.thepiratebay.se/201",
 # "http://rss.thepiratebay.se/202",
 # "http://rss.thepiratebay.se/207",
@@ -97,7 +98,7 @@ def analyze_filename_content(parsed_string, pos=0, has_title=False, inside_sep=F
 
     if elem is not None:
         if not has_title and not inside_sep and pos != elem.start():
-            param_tuple = ('TITLE', parsed_string[0:elem.start()])
+            param_tuple = ('TITLE', parsed_string[pos:elem.start()])
             pos = elem.start()
             has_title = True
         else:
@@ -108,7 +109,7 @@ def analyze_filename_content(parsed_string, pos=0, has_title=False, inside_sep=F
                 typ = elem.lastgroup
                 if re.match(r'^SEP', typ):
                     pos = elem.start() + 1
-                    param_tuple, pos, has_title = analyze_filename_content(parsed_string[0:elem.end()-1], pos, has_title, inside_sep=True)
+                    param_tuple, pos, has_title = analyze_filename_content(parsed_string[0:elem.end()], pos, has_title, inside_sep=True)
                 else:
                     value = elem.group(typ)
                     if re.match(r'^YEAR|^RIP|^LAN|^TAG|^FORMAT|^CAM', typ):
@@ -128,7 +129,8 @@ def analyze_filename_content(parsed_string, pos=0, has_title=False, inside_sep=F
 
 def comparing_title(title):
     aka_title = unicodedata.normalize('NFKD', title).encode('ascii', 'ignore')
-    aka_title = re.sub(r'\s|3D|\!|\?|\.|\(|\)|\-|\:|\,|\"|\&|\'', '', aka_title)
+    aka_title = re.sub(r'\s|3D|\!|\?|\.|\(|\)|\-|\:|\,|\"|\'', '', aka_title)
+    aka_title = re.sub(r'\&', 'and', aka_title)
     aka_title = aka_title.lower()
 
     return aka_title
@@ -139,8 +141,7 @@ def match_AKA(ia, movie_title, dict_to_check):
 
     if len(dict_to_check) > 0:
 
-        torrent_simple_title = re.sub(r'\s|3D|\'', '', movie_title)
-        torrent_simple_title = torrent_simple_title.lower()
+        torrent_simple_title = comparing_title(movie_title)
 
         for movie_ID, movie_obj in dict_to_check.iteritems():
             if movie_match is None:
@@ -182,8 +183,7 @@ def get_imdb_info(properties):
     movies = ia.search_movie(movie_title)
 
     # Removing spaces for title comparison
-    torrent_simple_title = re.sub(r'\s|3D|\'', '', movie_title)
-    torrent_simple_title = torrent_simple_title.lower()
+    torrent_simple_title = comparing_title(properties['title'])
 
     try:
         movie_year = int(properties['year'])
@@ -215,9 +215,7 @@ def get_imdb_info(properties):
                 if abs(imdb_movie_year - movie_year) <= 1:
                     year_match = True
 
-            imdb_title = movie_obj['title']
-            imdb_simple_title = re.sub(r'\s|3D|\!|\?|\.|\(|\)|\-|\:|\,|\"|\&|\'', '', imdb_title)
-            imdb_simple_title = imdb_simple_title.lower()
+            imdb_simple_title = comparing_title(movie_obj['title'])
 
             if torrent_simple_title == imdb_simple_title:
                 title_match = True
@@ -270,11 +268,11 @@ def get_imdb_info(properties):
         ia.update(movie_obj)
 
         try:
-            imdb_cover_url = movie_obj['cover url']
+            imdb_cover_url = movie_obj['cover url'].decode('utf-8')
         except:
             imdb_cover_url = ""
         try:
-            imdb_plot = movie_obj['plot outline']
+            imdb_plot = movie_obj['plot outline'].decode('utf-8')
         except:
             imdb_plot = ""
         try:
@@ -282,9 +280,30 @@ def get_imdb_info(properties):
         except:
             rating = 0
         try:
-            imdb_url = ia.get_imdbURL(movie_obj)
+            imdb_url = ia.get_imdbURL(movie_obj).decode('utf-8')
         except:
             imdb_url = ""
+        try:
+            directors_obj = movie_obj['director']
+            imdb_directors = u""
+            for index, director in enumerate(directors_obj):
+                imdb_directors += str(director) if index == 0 else ", " + str(director)
+        except:
+            imdb_directors = ""
+        try:
+            genres_obj = movie_obj['genres']
+            imdb_genres = u""
+            for index, genre in enumerate(genres_obj):
+                imdb_genres += genre if index == 0 else ", " + genre
+        except:
+            imdb_genres = ""
+        try:
+            main_cast_obj = movie_obj['cast'][:3]
+            imdb_main_cast = u""
+            for index, cast in enumerate(main_cast_obj):
+                imdb_main_cast += str(cast) if index == 0 else ", " + str(cast)
+        except:
+            imdb_main_cast = ""
 
     else:
         trust_id = False
@@ -293,13 +312,19 @@ def get_imdb_info(properties):
         imdb_url = ""
         imdb_plot = ""
         imdb_cover_url = ""
+        imdb_directors = ""
+        imdb_genres = ""
+        imdb_main_cast = ""
 
     properties['trust_imdb'] = trust_id
     properties['rating'] = rating
     properties['imdb_url'] = imdb_url
-    properties['imdb_plot'] = imdb_plot
+    properties['imdb_plot'] =imdb_plot
     properties['imdb_title'] = imdb_title
     properties['imdb_cover_url'] = imdb_cover_url
+    properties['imdb_directors'] = imdb_directors
+    properties['imdb_genres'] = imdb_genres
+    properties['imdb_main_cast'] = imdb_main_cast
 
     return
 
@@ -347,9 +372,9 @@ def parse_feed():
                 value = re.sub(r'_|\.', r' ', value)
                 if key in properties:
                     if key in ['misc', 'tag', 'lan']:
-                        properties[key] += " " + unicode(value.strip())
+                        properties[key] += " " + unicode(value.lstrip().strip())
                 else:
-                    properties[key] = unicode(value.strip())
+                    properties[key] = unicode(value.lstrip().strip())
 
             if entry.has_key("summary"):
                 summary = entry['summary']
@@ -398,13 +423,21 @@ def parse_feed():
 
             try:
                 byte_length = int(entry['torrent_contentlength'])
+            except:
+                byte_length = 0
+            try:
+                byte_length = int(entry['size']) if byte_length == 0 else byte_length
+            except:
+                byte_length = 0
+
+            if byte_length != 0:
                 mb = byte_length / (1024*1024)
                 if mb > 1024:
                     gb = round(mb/float(1024), 2)
                     properties['size'] = (str(gb), 'GB')
                 else:
                     properties['size'] = (str(mb), 'MB')
-            except:
+            else:
                 properties['size'] = None
 
             if not 'discard' in properties:
