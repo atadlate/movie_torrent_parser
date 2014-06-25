@@ -3,7 +3,8 @@ retrieving other useful info from IMDb and sending a digest by mail
 
 Usage :
 
-    python parser.py [ name_of_your_config_file ]
+    python parser.py [ name_of_your_config_file ] [ -l log_file ]
 
-If config_file is not passed, MovieTorrentParser will prompt you for connection details at the end of the script,
-and let you save configuration to a file for future use.
+If config_file is not passed, MovieTorrentParser will prompt you for the settings, let you save them to a file for future use, and let you schedule an automatic run of the script
+
+If -l option is passed, logs are written to log_file, printed to stdout otherwise

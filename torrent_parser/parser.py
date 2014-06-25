@@ -14,14 +14,17 @@ from imdb import IMDb
 from imdb.helpers import akasLanguages
 
 import mail_utils
+import config
 
 feed_urls = [
-    "http://www.limetorrents.com/rss/16/",
+    # Additional feeds can be added here
+    # "http://rss.thepiratebay.se/201",
+    # "http://rss.thepiratebay.se/202",
+    # "http://rss.thepiratebay.se/207",
+
     "http://kickass.to/movies/?rss=1",
 
-# "http://rss.thepiratebay.se/201",
-# "http://rss.thepiratebay.se/202",
-# "http://rss.thepiratebay.se/207",
+    # "http://www.limetorrents.com/rss/16/",
     ]
 
 title_specification = [
@@ -29,6 +32,7 @@ title_specification = [
     ('SEP2',  r'\(.+?\)'),
     ('SEP3',  r'\{.+?\}'),
     ('SEP4',  r'\<.+?\>'),
+    ('SEP5',  r'\*.+?\*'),
     ('YEAR1',  r'19[0-9]{2}'),
     ('YEAR2',  r'20[0-9]{2}'),
     ('RIP1',  r'dvdrip'),
@@ -128,6 +132,8 @@ def analyze_filename_content(parsed_string, pos=0, has_title=False, inside_sep=F
     return param_tuple, pos, has_title
 
 def comparing_title(title):
+    if not isinstance(title, unicode):
+        title = unicode(title, 'utf-8')
     aka_title = unicodedata.normalize('NFKD', title).encode('ascii', 'ignore')
     aka_title = re.sub(r'\s|3D|\!|\?|\.|\(|\)|\-|\:|\,|\"|\'', '', aka_title)
     aka_title = re.sub(r'\&', 'and', aka_title)
@@ -268,11 +274,11 @@ def get_imdb_info(properties):
         ia.update(movie_obj)
 
         try:
-            imdb_cover_url = movie_obj['cover url'].decode('utf-8')
+            imdb_cover_url = movie_obj['cover url']
         except:
             imdb_cover_url = ""
         try:
-            imdb_plot = movie_obj['plot outline'].decode('utf-8')
+            imdb_plot = movie_obj['plot outline']
         except:
             imdb_plot = ""
         try:
@@ -280,30 +286,30 @@ def get_imdb_info(properties):
         except:
             rating = 0
         try:
-            imdb_url = ia.get_imdbURL(movie_obj).decode('utf-8')
+            imdb_url = ia.get_imdbURL(movie_obj)
         except:
             imdb_url = ""
         try:
             directors_obj = movie_obj['director']
-            imdb_directors = u""
-            for index, director in enumerate(directors_obj):
-                imdb_directors += str(director) if index == 0 else ", " + str(director)
         except:
-            imdb_directors = ""
+            directors_obj = []
+        imdb_directors = u""
+        for index, director in enumerate(directors_obj):
+            imdb_directors += unicode(str(director), 'utf-8') if index == 0 else ", " + unicode(str(director), 'utf-8')
         try:
             genres_obj = movie_obj['genres']
-            imdb_genres = u""
-            for index, genre in enumerate(genres_obj):
-                imdb_genres += genre if index == 0 else ", " + genre
         except:
-            imdb_genres = ""
+            genres_obj = []
+        imdb_genres = u""
+        for index, genre in enumerate(genres_obj):
+            imdb_genres += genre if index == 0 else ", " + genre
         try:
             main_cast_obj = movie_obj['cast'][:3]
-            imdb_main_cast = u""
-            for index, cast in enumerate(main_cast_obj):
-                imdb_main_cast += str(cast) if index == 0 else ", " + str(cast)
         except:
-            imdb_main_cast = ""
+            main_cast_obj = []
+        imdb_main_cast = u""
+        for index, cast in enumerate(main_cast_obj):
+            imdb_main_cast += unicode(str(cast), 'utf-8') if index == 0 else ", " + unicode(str(cast), 'utf-8')
 
     else:
         trust_id = False
@@ -328,12 +334,6 @@ def get_imdb_info(properties):
 
     return
 
-def signal_handler(signum, frame):
-
-    if mail_utils.server_connected:
-        mail_utils.server.close()
-    sys.exit()
-
 def parse_feed():
 
     list_movie = dict()
@@ -345,22 +345,25 @@ def parse_feed():
         results = parse(feed_url)
         for entry in results['entries']:
 
-            torrent_title = entry['title']
-            torrent_file_url = entry['links'][1]['href']
+            torrent_title = entry['title'].strip()
+
+            # Depending on feed source, link to torrent html page might be added. We're only interested in the link
+            # to the torrent file itself, that should lie at the end of the list
+            torrent_file_url = entry['links'][-1]['href']
 
             # Delay console prints if user is prompted for configuration
-            if not mail_utils.config_ok:
-                execution_log.write("Processing : " + torrent_title)
+            if not config.config_ok:
+                execution_log.write("Processing : " + torrent_title + "\n")
             else:
                 if first_print:
                     previous_logs = execution_log.getvalue()
                     execution_log.close()
 
                     if len(previous_logs) > 0:
-                        mail_utils.console_log(previous_logs)
+                        config.console_log(previous_logs)
                     first_print = False
 
-                mail_utils.console_log("Processing : " + torrent_title)
+                config.console_log("Processing : " + torrent_title + "\n")
 
             pos = 0
             properties = dict()
@@ -372,9 +375,9 @@ def parse_feed():
                 value = re.sub(r'_|\.', r' ', value)
                 if key in properties:
                     if key in ['misc', 'tag', 'lan']:
-                        properties[key] += " " + unicode(value.lstrip().strip())
+                        properties[key] += u" " + value.lstrip().strip()
                 else:
-                    properties[key] = unicode(value.lstrip().strip())
+                    properties[key] = value.lstrip().strip()
 
             if entry.has_key("summary"):
                 summary = entry['summary']
@@ -386,7 +389,7 @@ def parse_feed():
                     if data != ():
                         key = data[0].lower()
                         value = data[1]
-                        tmp_dict[key] = unicode(value.strip())
+                        tmp_dict[key] = value.strip()
 
                 if tmp_dict.has_key('rating') and tmp_dict.has_key('title') and tmp_dict.has_key('year'):
                     # A torrent whose summary has all 3 information above is considered reliable. Consider these data
@@ -399,7 +402,8 @@ def parse_feed():
             if 'title' in properties:
                 if 'rip' in properties:
                     if 'lan' not in properties or re.search('hindi', properties['lan'].lower()) is None:
-                        if not properties['title'] in list_movie:
+                        key = comparing_title(properties['title'])
+                        if not key in list_movie:
                             if not torrent_title in list_movie_discarded:
                                 get_imdb_info(properties)
 
@@ -421,8 +425,13 @@ def parse_feed():
             properties['torrent_title'] = torrent_title
             properties['torrent_file_url'] = torrent_file_url
 
+            # Depending on feed source, size of torrent content might be stored in different keys
             try:
                 byte_length = int(entry['torrent_contentlength'])
+            except:
+                byte_length = 0
+            try:
+                byte_length = int(entry['contentlength']) if byte_length == 0 else byte_length
             except:
                 byte_length = 0
             try:
@@ -441,10 +450,12 @@ def parse_feed():
                 properties['size'] = None
 
             if not 'discard' in properties:
-                if not properties['title'] in list_movie:
+                key = comparing_title(properties['title'])
+
+                if not key in list_movie:
                     list_torrent = []
-                    list_movie[properties['title']] = list_torrent
-                list_movie[properties['title']].append(properties)
+                    list_movie[key] = list_torrent
+                list_movie[key].append(properties)
             else:
                 if not torrent_title in list_movie_discarded:
                     list_movie_discarded[torrent_title] = properties
@@ -452,21 +463,32 @@ def parse_feed():
     html_content, text_content = mail_utils.format_report(list_movie, list_movie_discarded)
     mail_utils.process_report(text_content, html_content)
 
+def signal_handler(signum, frame):
+
+    if mail_utils.server_connected:
+        mail_utils.server.close()
+    if isinstance(config.logger, file):
+        config.logger.close()
+    sys.exit()
+
 def main():
 
     signal.signal(signal.SIGINT, signal_handler)
 
-    tconfig_mail = threading.Thread(target=mail_utils.get_config, args=())
+    tconfig = threading.Thread(target=config.get_config, args=())
     tparser = threading.Thread(target=parse_feed, args=())
 
-    tconfig_mail.daemon = True
+    tconfig.daemon = True
     tparser.daemon = True
 
-    tconfig_mail.start()
+    tconfig.start()
     tparser.start()
 
     while not mail_utils.script_executed:
         sleep(1)
+
+    if isinstance(config.logger, file):
+        config.logger.close()
 
 if __name__ == "__main__":
     main()

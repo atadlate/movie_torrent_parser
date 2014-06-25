@@ -6,5 +6,8 @@ MovieTorrentParser.egg-info/dependency_links.txt
 MovieTorrentParser.egg-info/requires.txt
 MovieTorrentParser.egg-info/top_level.txt
 torrent_parser/__init__.py
+torrent_parser/config.py
 torrent_parser/mail_utils.py
 torrent_parser/parser.py
+torrent_parser/scripts/__init__.py
+torrent_parser/scripts/auto_run.py

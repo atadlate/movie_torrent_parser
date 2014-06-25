@@ -15,6 +15,7 @@ setup(
     long_description=open('README.txt').read(),
 
     install_requires=[
+        "python-crontab >= 1.8.1",
         "IMDbPY >= 5.0",
         "feedparser >= 5.1.3",
     ],
