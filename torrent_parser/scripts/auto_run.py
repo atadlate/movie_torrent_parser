@@ -11,7 +11,7 @@ auto_run_config_file_name = "auto_run_config.txt"
 auto_run_config = os.path.join(os.path.dirname(sys.argv[0]), auto_run_config_file_name)
 
 script_file = os.path.abspath(os.path.join(os.path.dirname(sys.argv[0]), os.path.pardir, 'parser.py'))
-script_log = os.path.abspath(os.path.join(os.path.dirname(sys.argv[0]), os.path.pardir, 'parser_log.txt'))
+default_script_log = os.path.abspath(os.path.join(os.path.dirname(sys.argv[0]), os.path.pardir, 'parser_log.txt'))
 default_vhome = os.path.join(os.environ['HOME'], '.virtualenvs')
 run_config = dict()
 
@@ -49,6 +49,11 @@ if os.path.exists(auto_run_config):
         if os.path.exists(vpython):
             python_bin = vpython
 
+    if run_config.has_key('log_file'):
+        script_log = os.path.abspath(run_config['log_file'])
+    else:
+        script_log = default_script_log
+
     if run_config.has_key('file_config'):
         config_file = run_config['file_config']
 
@@ -59,9 +64,9 @@ if os.path.exists(auto_run_config):
                 if network_ok:
                     break
                 else:
-                    sleep(2)
+                    sleep(3)
             if network_ok:
-                subprocess.call([python_bin, script_file, config_file, '-l', script_log])
+                subprocess.call([python_bin, script_file, config_file, '-l', script_log, '-b'])
             else:
                 exit()
         else:

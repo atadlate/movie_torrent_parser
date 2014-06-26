@@ -6,12 +6,14 @@ import pickle
 import unicodedata
 import getpass
 import copy
+import re
+import logging
 from crontab import CronTab
 
-config_ok = False
+status = "init"
 config = dict()
 default_log_file = os.path.join(os.path.dirname(sys.argv[0]), "parser_log.txt")
-logger = 'console'
+file_log = ""
 
 def prompt_hidden(prompt):
     return getpass.getpass(prompt).strip()
@@ -41,13 +43,15 @@ def decrypt_pass(password=""):
 
 def set_cron(mode, file_config):
 
+    # TODO : Have a look at the @daily cron job and use anacron instead to make sure it is executed
     if mode in ['daily', 'startup']:
 
         my_name = sys.argv[0]
         script_dir = os.path.abspath(os.path.join(os.path.dirname(my_name), 'scripts'))
         auto_run_config_file = os.path.join(script_dir, 'auto_run_config.txt')
         script_name = os.path.join(script_dir, 'auto_run.py')
-        cmd = 'python ' + script_name
+        cmd = 'sleep 30 && python ' + script_name + "\n"
+        # cmd = 'python ' + script_name + "\n"
 
         auto_run_config = dict()
         auto_run_config['file_config'] = os.path.abspath(file_config)
@@ -56,15 +60,20 @@ def set_cron(mode, file_config):
         if venv != "":
             auto_run_config['virtual_env'] = venv
 
+        autorun_log_file = prompt("Path to the log file to use for automatic run: ")
+        if autorun_log_file != "":
+            auto_run_config['log_file'] = os.path.abspath(autorun_log_file)
+
         with open(auto_run_config_file, 'wb') as fd:
             pickle.dump(auto_run_config, fd)
 
         user_cron = CronTab(user=True)
 
         # Erase any previous job related to torrent-parser auto-run
-        torrents_jobs = user_cron.find_command(cmd)
-        for torrent_job in torrents_jobs:
-            user_cron.remove(torrent_job)
+        # torrents_jobs = user_cron.find_command(cmd)
+        for user_job in user_cron.crons[:]:
+            if re.search(r'torrent_parser.*auto_run\.py', user_job.command):
+                user_cron.remove(user_job)
 
         job = user_cron.new(command=cmd, comment='auto-run of movie-torrent-parser')
 
@@ -79,7 +88,6 @@ def set_cron(mode, file_config):
 def get_config_from_user():
     global config
 
-    print "Configuration file not passed to script or invalid.\n"
     print " => Please enter your preferences\n"
 
     method = prompt('Would you like the report to be displayed on the console or sent by mail? (console/mail):')
@@ -131,36 +139,55 @@ def get_config_from_user():
 
 def get_config():
     global config
-    global config_ok
+    global status
     global default_log_file
-    global logger
+    global file_log
 
     file_config = None
     file_log = None
+    log_to_file = False
+    background_mode = False
+
+    usage = "Usage: python parser.py [ name_of_your_config_file ] [ -b ] [ -l log_file ]"
 
     if len(sys.argv) > 1:
         # Retrieve arguments that were passed to the script
         waiting_for_log = False
         for index in range(1, len(sys.argv)):
-
             argument = sys.argv[index]
             if argument == '-l':
                 waiting_for_log = True
+                log_to_file = True
+            elif argument == '-b':
+                background_mode = True
             else:
                 if waiting_for_log:
                     file_log = argument
                     waiting_for_log = False
                 else:
-                    file_config = argument
+                    if file_config is None:
+                        file_config = argument
+                    else:
+                        print "Invalid argument passed to script"
+                        print usage
+                        # Exiting
+                        status = 'crash'
+                        sys.exit()
 
     # Determining logging method
-    if file_log is not None:
-        if not os.path.exists(file_log):
+    if log_to_file:
+        if file_log is None:
             file_log = default_log_file
         try:
-            logger = open(file_log, 'w')
+            logging.basicConfig(filename=file_log, filemode='w', level=logging.INFO,
+                                format='%(asctime)s - %(levelname)s - %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
         except:
-            logger = 'console'
+            log_to_file=False
+
+    if not log_to_file:
+        file_log = ""
+        logging.basicConfig(level=logging.INFO,
+                            format='%(asctime)s - %(levelname)s - %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
 
     if file_config is not None:
         if os.path.exists(file_config):
@@ -168,9 +195,9 @@ def get_config():
                 with open(file_config, 'rb') as fd:
                     config = pickle.load(fd)
             except:
-                console_log("*** Error opening config file " + file_config)
+                log_message("Couldn't open config file " + file_config, 'error')
         else:
-            console_log(file_config + " is not a valid path")
+            log_message(file_config + " is not a valid path", 'error')
 
     if config.has_key('password'):
         config['password'] = decrypt_pass(config['password'])
@@ -185,25 +212,48 @@ def get_config():
                 and config.has_key('from')
                 and config.has_key('to')
                 and config.has_key('mail_format')):
-                    get_config_from_user()
+                    if background_mode:
+                        log_message("Invalid configuration while in background mode", 'error')
+                        status = 'crash'
+                        sys.exit()
+                    else:
+                        get_config_from_user()
 
     else:
-        get_config_from_user()
+        if background_mode:
+            log_message("Invalid configuration while in background mode", 'error')
+            status = 'crash'
+            sys.exit()
+        else:
+            get_config_from_user()
 
-    config_ok = True
+    status = 'ok'
 
 def console_log(text_content):
 
-    global logger
+    global file_log
 
     if not isinstance(text_content, unicode):
         text_content = unicode(text_content, 'utf-8')
 
-    if isinstance(logger, file):
-        logger.write(text_content.encode('utf-8'))
-    else:
+    if file_log == "":
         try:
             print text_content.strip().encode('utf-8')
         except UnicodeEncodeError:
             ascii_text_content = unicodedata.normalize('NFKD', text_content).encode('ascii', 'ignore')
             print ascii_text_content.strip()
+    else:
+        with open(file_log, 'a') as fd:
+            fd.write(text_content.strip().encode('utf-8'))
+
+def log_message(text_content, type='info'):
+
+    if type == 'error':
+        logger = logging.error
+    else:
+        logger = logging.info
+
+    if not isinstance(text_content, unicode):
+        text_content = unicode(text_content, 'utf-8')
+
+    logger(text_content.strip().encode('utf-8'))

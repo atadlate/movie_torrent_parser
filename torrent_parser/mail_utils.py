@@ -6,7 +6,6 @@ from email.mime.text import MIMEText
 from time import sleep
 import config
 
-script_executed = False
 server_connected = False
 server = None
 
@@ -56,6 +55,8 @@ def format_report(list_movie, list_movie_discarded):
                     text_content += "\n"
                 if common_properties['imdb_genres'] != "":
                     text_content += "Genre : " + common_properties['imdb_genres'] + "\n"
+                if common_properties['imdb_countries'] != "":
+                    text_content += "Country : " + common_properties['imdb_countries'] + "\n"
                 if common_properties['imdb_directors'] != "":
                     text_content += "Director : " + common_properties['imdb_directors'] + "\n"
                 if common_properties['imdb_main_cast'] != "":
@@ -70,7 +71,7 @@ def format_report(list_movie, list_movie_discarded):
                 open_tr = False
                 if common_properties['imdb_cover_url'] != "":
                     # Determine table dim for picture rowspan
-                    list_attributes = ['imdb_genres', 'imdb_directors', 'imdb_main_cast', 'imdb_plot']
+                    list_attributes = ['imdb_genres', 'imdb_countries', 'imdb_directors', 'imdb_main_cast', 'imdb_plot']
                     nb_row = [1 if common_properties[attribute].strip() != "" else 0 for attribute in list_attributes].count(1) + 1
                     html_content += "<tr><td rowspan=\"" + str(nb_row) + "\">"
                     html_content += "<img src=\"" + common_properties['imdb_cover_url'] + "\"></td>"
@@ -86,6 +87,8 @@ def format_report(list_movie, list_movie_discarded):
 
                 if common_properties['imdb_genres'] != "":
                     html_content += "<tr><td>Genre : " + common_properties['imdb_genres'] + "</td></tr>"
+                if common_properties['imdb_countries'] != "":
+                    html_content += "<tr><td>Country : " + common_properties['imdb_countries'] + "</td></tr>"
                 if common_properties['imdb_directors'] != "":
                     html_content += "<tr><td>Director : " + common_properties['imdb_directors'] + "</td></tr>"
                 if common_properties['imdb_main_cast'] != "":
@@ -166,12 +169,8 @@ def format_report(list_movie, list_movie_discarded):
 
 def process_report(text_content, html_content):
 
-    global script_executed
     global server_connected
     global server
-
-    while not config.config_ok:
-        sleep(1)
 
     if config.config['method'] == 'mail':
 
@@ -188,9 +187,9 @@ def process_report(text_content, html_content):
             server = smtplib.SMTP(config.config['smtp_server'])
             server_connected = True
         except:
+            config.log_message("Unexpected error while connecting to mail server:" + str(sys.exc_info()[0]), 'error')
+            config.log_message("Printing report to console\n")
             config.console_log("\n")
-            config.console_log("*** Unexpected error while connecting to mail server :" + str(sys.exc_info()[0]))
-            config.console_log("Printing report to console\n")
             config.console_log(text_content)
 
         if server_connected:
@@ -200,11 +199,11 @@ def process_report(text_content, html_content):
                 server.login(config.config['username'], config.config['password'])
                 server.sendmail(config.config['from'], config.config['to'], message.as_string())
                 server.quit()
-                config.console_log("Report sent by mail\n")
+                config.log_message("Report sent by mail")
             except:
+                config.log_message("Unexpected error while sending mail :" + str(sys.exc_info()[0]), 'error')
+                config.log_message("Printing report to console")
                 config.console_log("\n")
-                config.console_log("*** Unexpected error while sending mail :" + str(sys.exc_info()[0]))
-                config.console_log("Printing report to console\n")
                 config.console_log(text_content)
             finally:
                 server.close()
@@ -212,5 +211,3 @@ def process_report(text_content, html_content):
     else:
         config.console_log("\n")
         config.console_log(text_content)
-
-    script_executed = True

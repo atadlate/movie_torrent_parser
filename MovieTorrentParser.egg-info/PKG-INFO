@@ -11,9 +11,12 @@ Description: Handy parser going through RSS provided by torrent sites, selecting
         
         Usage :
         
-            python parser.py [ name_of_your_config_file ] [ -l log_file ]
+            python parser.py [name_of_your_config_file] [-b] [-l log_file]
         
-        If config_file is not passed, MovieTorrentParser will prompt you for the settings, let you save them to a file for future use, and let you schedule an automatic run of the script
+        If config_file is not passed or invalid, the script will prompt you for the settings, let you save them to a file for future use, and let you schedule an automatic run with the defined configuration
         
-        If -l option is passed, logs are written to log_file, printed to stdout otherwise
+        If -b option is passed, script will run in background. In this mode, if configuration is missing or invalid, the script won't prompt you for preferences and will consider a fatal error. This is the mode used during auto-run
+        
+        If -l option is passed, logs are written to the log_file passed as argument instead of stdout. If log_file isn't given or doesn't exist, a default log file named parser_log.txt in the package distribution is used
+        
 Platform: UNKNOWN

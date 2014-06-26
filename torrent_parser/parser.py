@@ -290,6 +290,13 @@ def get_imdb_info(properties):
         except:
             imdb_url = ""
         try:
+            countries_obj = movie_obj['countries']
+        except:
+            countries_obj = []
+        imdb_countries = u""
+        for index, country in enumerate(countries_obj):
+            imdb_countries += country if index == 0 else ", " + country
+        try:
             directors_obj = movie_obj['director']
         except:
             directors_obj = []
@@ -319,6 +326,7 @@ def get_imdb_info(properties):
         imdb_plot = ""
         imdb_cover_url = ""
         imdb_directors = ""
+        imdb_countries = ""
         imdb_genres = ""
         imdb_main_cast = ""
 
@@ -329,6 +337,7 @@ def get_imdb_info(properties):
     properties['imdb_title'] = imdb_title
     properties['imdb_cover_url'] = imdb_cover_url
     properties['imdb_directors'] = imdb_directors
+    properties['imdb_countries'] = imdb_countries
     properties['imdb_genres'] = imdb_genres
     properties['imdb_main_cast'] = imdb_main_cast
 
@@ -352,18 +361,21 @@ def parse_feed():
             torrent_file_url = entry['links'][-1]['href']
 
             # Delay console prints if user is prompted for configuration
-            if not config.config_ok:
+            if config.status == 'init':
                 execution_log.write("Processing : " + torrent_title + "\n")
+            elif config.status == 'crash':
+                sys.exit()
             else:
                 if first_print:
                     previous_logs = execution_log.getvalue()
                     execution_log.close()
 
                     if len(previous_logs) > 0:
-                        config.console_log(previous_logs)
+                        for line in previous_logs.splitlines():
+                            config.log_message(line)
                     first_print = False
 
-                config.console_log("Processing : " + torrent_title + "\n")
+                config.log_message("Processing " + torrent_title + "\n")
 
             pos = 0
             properties = dict()
@@ -460,6 +472,23 @@ def parse_feed():
                 if not torrent_title in list_movie_discarded:
                     list_movie_discarded[torrent_title] = properties
 
+    log_to_print = False
+    while config.status == 'init':
+        log_to_print = True
+        sleep(1)
+
+    if config.status == 'ok':
+        if log_to_print:
+            previous_logs = execution_log.getvalue()
+            execution_log.close()
+
+            if len(previous_logs) > 0:
+                for line in previous_logs.splitlines():
+                    config.log_message(line)
+
+    else:
+        sys.exit()
+
     html_content, text_content = mail_utils.format_report(list_movie, list_movie_discarded)
     mail_utils.process_report(text_content, html_content)
 
@@ -467,8 +496,6 @@ def signal_handler(signum, frame):
 
     if mail_utils.server_connected:
         mail_utils.server.close()
-    if isinstance(config.logger, file):
-        config.logger.close()
     sys.exit()
 
 def main():
@@ -476,19 +503,10 @@ def main():
     signal.signal(signal.SIGINT, signal_handler)
 
     tconfig = threading.Thread(target=config.get_config, args=())
-    tparser = threading.Thread(target=parse_feed, args=())
-
     tconfig.daemon = True
-    tparser.daemon = True
-
     tconfig.start()
-    tparser.start()
 
-    while not mail_utils.script_executed:
-        sleep(1)
-
-    if isinstance(config.logger, file):
-        config.logger.close()
+    parse_feed()
 
 if __name__ == "__main__":
     main()
