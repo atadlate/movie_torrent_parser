@@ -10,12 +10,12 @@ from time import sleep, time
 from datetime import date
 
 auto_run_config_file_name = "auto_run_config.txt"
-last_auto_run_execution = "last_auto_run_execution.txt"
 auto_run_config = os.path.join(os.path.dirname(sys.argv[0]), auto_run_config_file_name)
+last_auto_run_execution = "last_auto_run_execution.txt"
+last_auto_run_execution = os.path.join(os.path.dirname(sys.argv[0]), last_auto_run_execution)
 
 script_file = os.path.abspath(os.path.join(os.path.dirname(sys.argv[0]), os.path.pardir, 'parser.py'))
 default_script_log = os.path.abspath(os.path.join(os.path.dirname(sys.argv[0]), os.path.pardir, 'parser_log.txt'))
-default_vhome = os.path.join(os.environ['HOME'], '.virtualenvs')
 run_config = dict()
 
 def internet_on():
@@ -60,14 +60,7 @@ def main():
             python_bin = 'python'
 
             if run_config.has_key('virtual_env'):
-                vname = run_config['virtual_env']
-
-                if os.environ.has_key('WORKON_HOME'):
-                    vpath = os.path.join(os.environ['WORKON_HOME'], vname)
-                else:
-                    vpath = os.path.join(default_vhome, vname)
-
-                vpython = os.path.join(vpath, 'bin', 'python')
+                vpython = run_config['virtual_env']
 
                 if os.path.exists(vpython):
                     python_bin = vpython

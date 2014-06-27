@@ -8,6 +8,7 @@ import getpass
 import copy
 import re
 import logging
+import platform
 from crontab import CronTab
 
 status = "init"
@@ -43,7 +44,6 @@ def decrypt_pass(password=""):
 
 def set_cron(mode, file_config):
 
-    # TODO : Make the whole thing Windows compatible without an installer (especially the cron part)
     if mode in ['daily', 'startup', 'weekly']:
 
         my_name = sys.argv[0]
@@ -51,15 +51,28 @@ def set_cron(mode, file_config):
         auto_run_config_file = os.path.join(script_dir, 'auto_run_config.txt')
         script_name = os.path.join(script_dir, 'auto_run.py')
 
-        # Delay a bit program start to be sure all services are on
-        cmd = 'sleep 30 && python ' + script_name + "\n"
-
         auto_run_config = dict()
         auto_run_config['file_config'] = os.path.abspath(file_config)
 
-        venv = prompt("Name of the virtual_env to activate before the script is run (leave blank if standard python interpreter): ")
-        if venv != "":
-            auto_run_config['virtual_env'] = venv
+        vname = prompt("Name of the virtual_env to activate before the script is run (leave blank if standard python interpreter): ")
+        if vname != "":
+
+            venv_path = prompt("Path to virtual env's location (leave blank if in WORKON_HOME): ")
+            if venv_path == "":
+                vpath = os.path.join(os.environ['WORKON_HOME'], vname)
+            else:
+                vpath = os.path.abspath(os.path.join(venv_path, vname))
+
+            if os.name == 'posix':
+                vpython = os.path.join(vpath, 'bin', 'python')
+            else:
+                vpython = os.path.join(vpath, 'Scripts', 'python.exe')
+
+            if os.path.exists(vpython):
+                auto_run_config['virtual_env'] = vpython
+            else:
+                log_message('Interpreter {} couldn\'t be found. Auto-run not set'.format(vpython), 'error')
+                return
 
         autorun_log_file = prompt("Path to the log file to use for automatic run: ")
         if autorun_log_file != "":
@@ -70,19 +83,42 @@ def set_cron(mode, file_config):
         with open(auto_run_config_file, 'wb') as fd:
             pickle.dump(auto_run_config, fd)
 
-        user_cron = CronTab(user=True)
+        if os.name == 'posix':
+            # Delay a bit program start to be sure all services are on
+            cmd = 'sleep 30 && python ' + script_name + "\n"
 
-        # Erase any previous job related to torrent-parser auto-run
-        # torrents_jobs = user_cron.find_command(cmd)
-        for user_job in user_cron.crons[:]:
-            if re.search(r'torrent_parser.*auto_run\.py', user_job.command):
-                user_cron.remove(user_job)
+            # Erase any previous job related to torrent-parser auto-run
+            # torrents_jobs = user_cron.find_command(cmd)
+            user_cron = CronTab(user=True)
+            for user_job in user_cron.crons[:]:
+                if re.search(r'torrent_parser.*auto_run\.py', user_job.command):
+                    user_cron.remove(user_job)
 
-        # Schedule a new job that will execute at every system reboot and check the last execution date
-        job = user_cron.new(command=cmd, comment='auto-run of movie-torrent-parser')
-        job.every_reboot()
-        job.enable()
-        user_cron.write()
+            # Schedule a new job that will execute at every system reboot and check the last execution date
+            job = user_cron.new(command=cmd, comment='auto-run of movie-torrent-parser')
+            job.every_reboot()
+            job.enable()
+            user_cron.write()
+
+        elif os.name == 'nt':
+            cmd = 'python ' + script_name
+
+            if os.environ.has_key('USERNAME'):
+                try:
+                    is_xp = (platform.win32_ver()[0] == 'XP')
+                except:
+                    is_xp = False
+                if is_xp:
+                    startup_folder = "C:\\Documents and Settings\\" + os.environ.get('USERNAME') + \
+                                     "\\Start Menu\\Programs\\Startup"
+                else:
+                    startup_folder = "C:\\Users\\" + os.environ.get('USERNAME') + \
+                                     "\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup"
+
+                movie_batch = startup_folder + "\\movie_torrent.cmd"
+                with open(movie_batch, 'w') as fd:
+                    fd.write(cmd)
+
 
 def get_config_from_user():
     global config
@@ -122,26 +158,28 @@ def get_config_from_user():
         except:
             log_message("An exception occured. Config not saved to file", 'error')
         else:
-            auto_type_cfm = prompt(
-                "Would you like to start the script automatically with this configuration ?\n\
-                This will replace previous settings for automatic start if any.\n\
-                (Y/N): ")
 
-            if auto_type_cfm.lower() in ['yes', 'y']:
-                auto_type = prompt(
-                    "How often would you like the auto-run to execute ?\n\
-                    - At every system startup (S)\n\
-                    - Daily (D)\n\
-                    - Weekly (W): ")
+            if os.name in ['posix', 'nt']:
+                auto_type_cfm = prompt(
+                    "Would you like to start the script automatically with this configuration ?\n" +
+                    "This will replace previous settings for automatic start if any.\n" +
+                    "(Y/N): ")
 
-                if auto_type.lower() in ["startup", "s"]:
-                    set_cron('startup', config_path)
-                elif auto_type.lower() in ["daily", "d"]:
-                    set_cron('daily', config_path)
-                elif auto_type.lower() in ["weekly", "w"]:
-                    set_cron('weekly', config_path)
-                else:
-                    log_message(auto_type + ' is not a valid choice. Auto-run not set.', 'error')
+                if auto_type_cfm.lower() in ['yes', 'y']:
+                    auto_type = prompt(
+                        "How often would you like the auto-run to execute ?\n" +
+                        "- At every system startup (S)\n" +
+                        "- Daily (D)\n" +
+                        "- Weekly (W): ")
+
+                    if auto_type.lower() in ["startup", "s"]:
+                        set_cron('startup', config_path)
+                    elif auto_type.lower() in ["daily", "d"]:
+                        set_cron('daily', config_path)
+                    elif auto_type.lower() in ["weekly", "w"]:
+                        set_cron('weekly', config_path)
+                    else:
+                        log_message(auto_type + ' is not a valid choice. Auto-run not set.', 'error')
 
     console_log("\n")
 
