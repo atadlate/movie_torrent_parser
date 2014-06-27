@@ -5,9 +5,12 @@ import os
 import sys
 import subprocess
 import urllib2
-from time import sleep
+import logging
+from time import sleep, time
+from datetime import date
 
 auto_run_config_file_name = "auto_run_config.txt"
+last_auto_run_execution = "last_auto_run_execution.txt"
 auto_run_config = os.path.join(os.path.dirname(sys.argv[0]), auto_run_config_file_name)
 
 script_file = os.path.abspath(os.path.join(os.path.dirname(sys.argv[0]), os.path.pardir, 'parser.py'))
@@ -22,57 +25,87 @@ def internet_on():
     except urllib2.URLError as err: pass
     return False
 
-def exit():
-    print "*** Problem during auto-run ***\n"
-    print "Exiting\n"
-    sys.exit()
+def main():
+    if os.path.exists(auto_run_config):
+        try:
+            with open(auto_run_config, 'rb') as fd:
+                run_config = pickle.load(fd)
+        except:
+            logging.error("problem while opening {}".format(auto_run_config))
+            sys.exit()
 
-if os.path.exists(auto_run_config):
-    try:
-        with open(auto_run_config, 'rb') as fd:
-            run_config = pickle.load(fd)
-    except:
-        exit()
-
-    python_bin = 'python'
-
-    if run_config.has_key('virtual_env'):
-        vname = run_config['virtual_env']
-
-        if os.environ.has_key('WORKON_HOME'):
-            vpath = os.path.join(os.environ['WORKON_HOME'], vname)
-        else:
-            vpath = os.path.join(default_vhome, vname)
-
-        vpython = os.path.join(vpath, 'bin', 'python')
-
-        if os.path.exists(vpython):
-            python_bin = vpython
-
-    if run_config.has_key('log_file'):
-        script_log = os.path.abspath(run_config['log_file'])
-    else:
-        script_log = default_script_log
-
-    if run_config.has_key('file_config'):
-        config_file = run_config['file_config']
-
-        if os.path.exists(config_file) and os.path.exists(script_file):
-            network_ok = False
-            for i in range(10):
-                network_ok = internet_on()
-                if network_ok:
-                    break
-                else:
-                    sleep(3)
-            if network_ok:
-                subprocess.call([python_bin, script_file, config_file, '-l', script_log, '-b'])
+        execute_script = False
+        if run_config.has_key('mode') and run_config['mode'] in ['daily', 'weekly']:
+            if os.path.exists(last_auto_run_execution):
+                with open(last_auto_run_execution, 'r') as fd:
+                    try:
+                        last_execution = date.fromtimestamp(float(fd.read()))
+                    except:
+                        # Assume not executed before
+                        execute_script = True
+                    else:
+                        today = date.today()
+                        difference = (today - last_execution).days
+                        if (difference >= 7 and run_config['mode'] == 'weekly') \
+                                or (difference >= 1 and run_config['mode'] == 'daily'):
+                            execute_script = True
             else:
-                exit()
+                # Assume not executed before
+                execute_script = True
         else:
-            exit()
-    else:
-        exit()
+            # Assume at every system_startup. Continue execution
+            execute_script = True
 
-else:
-    exit()
+        if execute_script:
+            python_bin = 'python'
+
+            if run_config.has_key('virtual_env'):
+                vname = run_config['virtual_env']
+
+                if os.environ.has_key('WORKON_HOME'):
+                    vpath = os.path.join(os.environ['WORKON_HOME'], vname)
+                else:
+                    vpath = os.path.join(default_vhome, vname)
+
+                vpython = os.path.join(vpath, 'bin', 'python')
+
+                if os.path.exists(vpython):
+                    python_bin = vpython
+
+            if run_config.has_key('log_file'):
+                script_log = os.path.abspath(run_config['log_file'])
+            else:
+                script_log = default_script_log
+
+            if run_config.has_key('file_config'):
+                config_file = run_config['file_config']
+
+                if os.path.exists(config_file) and os.path.exists(script_file):
+                    network_ok = False
+                    for i in range(10):
+                        network_ok = internet_on()
+                        if network_ok:
+                            break
+                        else:
+                            sleep(3)
+                    if network_ok:
+                        subprocess.call([python_bin, script_file, config_file, '-l', script_log, '-b'])
+                        with open(last_auto_run_execution, 'w') as fd:
+                            fd.write(str(time()))
+                    else:
+                        logging.error("Network not available after max number of attempts")
+                        sys.exit()
+                else:
+                    logging.error("{} or {} are missing".format(config_file, script_file))
+                    sys.exit()
+            else:
+                logging.error("{} has an invalid format".format(auto_run_config))
+                sys.exit()
+        else:
+            sys.exit()
+    else:
+        logging.error("{} is not a valid path".format(auto_run_config))
+        sys.exit()
+
+if __name__ == "__main__":
+    main()

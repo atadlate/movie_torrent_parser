@@ -43,15 +43,16 @@ def decrypt_pass(password=""):
 
 def set_cron(mode, file_config):
 
-    # TODO : Have a look at the @daily cron job and use anacron instead to make sure it is executed
-    if mode in ['daily', 'startup']:
+    # TODO : Make the whole thing Windows compatible without an installer (especially the cron part)
+    if mode in ['daily', 'startup', 'weekly']:
 
         my_name = sys.argv[0]
         script_dir = os.path.abspath(os.path.join(os.path.dirname(my_name), 'scripts'))
         auto_run_config_file = os.path.join(script_dir, 'auto_run_config.txt')
         script_name = os.path.join(script_dir, 'auto_run.py')
+
+        # Delay a bit program start to be sure all services are on
         cmd = 'sleep 30 && python ' + script_name + "\n"
-        # cmd = 'python ' + script_name + "\n"
 
         auto_run_config = dict()
         auto_run_config['file_config'] = os.path.abspath(file_config)
@@ -64,6 +65,8 @@ def set_cron(mode, file_config):
         if autorun_log_file != "":
             auto_run_config['log_file'] = os.path.abspath(autorun_log_file)
 
+        auto_run_config['mode'] = mode
+
         with open(auto_run_config_file, 'wb') as fd:
             pickle.dump(auto_run_config, fd)
 
@@ -75,13 +78,9 @@ def set_cron(mode, file_config):
             if re.search(r'torrent_parser.*auto_run\.py', user_job.command):
                 user_cron.remove(user_job)
 
+        # Schedule a new job that will execute at every system reboot and check the last execution date
         job = user_cron.new(command=cmd, comment='auto-run of movie-torrent-parser')
-
-        if mode == 'daily':
-            job.every(1).days()
-        elif mode == 'startup':
-            job.every_reboot()
-
+        job.every_reboot()
         job.enable()
         user_cron.write()
 
@@ -121,21 +120,30 @@ def get_config_from_user():
 
                 pickle.dump(saved_config, fd)
         except:
-            print "   An exception occured. Config not saved to file\n"
+            log_message("An exception occured. Config not saved to file", 'error')
         else:
-            auto_type = prompt(
-                """Would you like to start the script automatically with this configuration ?
-(will replace previous settings for automatic start if any)
-    - At every system startup
-    - Daily
-    - Never
-(startup/daily/never): """)
-            if auto_type.lower() == "startup" or auto_type.lower() == "s":
-                set_cron('startup', config_path)
-            elif auto_type.lower() == "daily" or auto_type.lower() == "d":
-                set_cron('daily', config_path)
+            auto_type_cfm = prompt(
+                "Would you like to start the script automatically with this configuration ?\n\
+                This will replace previous settings for automatic start if any.\n\
+                (Y/N): ")
 
-    print "\n"
+            if auto_type_cfm.lower() in ['yes', 'y']:
+                auto_type = prompt(
+                    "How often would you like the auto-run to execute ?\n\
+                    - At every system startup (S)\n\
+                    - Daily (D)\n\
+                    - Weekly (W): ")
+
+                if auto_type.lower() in ["startup", "s"]:
+                    set_cron('startup', config_path)
+                elif auto_type.lower() in ["daily", "d"]:
+                    set_cron('daily', config_path)
+                elif auto_type.lower() in ["weekly", "w"]:
+                    set_cron('weekly', config_path)
+                else:
+                    log_message(auto_type + ' is not a valid choice. Auto-run not set.', 'error')
+
+    console_log("\n")
 
 def get_config():
     global config
