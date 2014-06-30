@@ -104,6 +104,13 @@ def format_report(list_movie, list_movie_discarded):
                     html_content += "<b>*** WARNING : Approximate IMDB match ***</b><br>"
                     html_content += "<br>"
 
+                if common_properties['nb_votes'] < 100:
+                    text_content += "*** WARNING : Only " + str(common_properties['nb_votes']) + " votes considered for the rating ***\n"
+                    text_content += "\n"
+
+                    html_content += "<b>*** WARNING : Only " + str(common_properties['nb_votes']) + " votes considered for the rating ***</b><br>"
+                    html_content += "<br>"
+
             else:
                 text_content += "NO IMDB MATCH FOUND\n"
                 text_content += "\n"
