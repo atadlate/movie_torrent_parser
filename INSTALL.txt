@@ -1,6 +1,6 @@
 To install directly from github repo:
 
-    pip install git+https://github.com/atadlate/movie_torrent_parser.git#egg=MovieTorrentParser
+        pip install git+https://github.com/atadlate/movie_torrent_parser.git#egg=MovieTorrentParser
 
 Warning : there are 2 dependencies that pip will fail to resolve - lxml and python-crontab
 
@@ -11,7 +11,7 @@ lxml can't compile unless 2 C libraries libxml2-dev and libxslt-devel are instal
 You can :
 
     - Install these packages manually (from http://xmlsoft.org/downloads.html)
-    - Or run : STATIC_DEPS=true CFLAGS="-fPIC" pip install lmxl
+    - Or run : STATIC_DEPS=true CFLAGS="-fPIC" pip install lxml
 
     2 - python-crontab
 

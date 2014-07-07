@@ -1,0 +1,3 @@
+[console_scripts]
+torrent_parser = torrent_parser.parser:main
+

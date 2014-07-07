@@ -3,6 +3,7 @@ setup.py
 MovieTorrentParser.egg-info/PKG-INFO
 MovieTorrentParser.egg-info/SOURCES.txt
 MovieTorrentParser.egg-info/dependency_links.txt
+MovieTorrentParser.egg-info/entry_points.txt
 MovieTorrentParser.egg-info/requires.txt
 MovieTorrentParser.egg-info/top_level.txt
 torrent_parser/__init__.py
