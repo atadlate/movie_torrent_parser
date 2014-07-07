@@ -13,8 +13,11 @@ setup(
     license='GPL V3',
     description='Handy movie torrent parser',
     long_description=open('README.txt').read(),
-    scripts=['bin/torrent_parser'],
-
+    entry_points={
+            'console_scripts': [
+                'torrent_parser = torrent_parser.parser:main'
+            ]
+    },
     install_requires=[
         "python-crontab >= 1.8",
         "IMDbPY >= 5.0",
