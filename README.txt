@@ -3,7 +3,7 @@ retrieving other useful info from IMDb and sending a digest by mail
 
 Usage :
 
-    python parser.py [name_of_your_config_file] [-b] [-l log_file]
+    torrent_parser [config_file] [-b] [-l log_file]
 
 If config_file is not passed or invalid, the script will prompt you for the settings, let you save them to a file for future use, and let you schedule an automatic run with the defined configuration
 
