@@ -5,7 +5,7 @@ Summary: Handy movie torrent parser
 Home-page: UNKNOWN
 Author: mcharbit
 Author-email: mcharbit@pentalog.fr
-License: GPL
+License: GPL V3
 Description: Handy parser going through RSS provided by torrent sites, selecting movies with proper encoding and IMDB rating,
         retrieving other useful info from IMDb and sending a digest by mail
         

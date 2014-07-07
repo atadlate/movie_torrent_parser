@@ -10,9 +10,10 @@ setup(
 
     author='mcharbit',
     author_email='mcharbit@pentalog.fr',
-    license='GPL',
+    license='GPL V3',
     description='Handy movie torrent parser',
     long_description=open('README.txt').read(),
+    scripts=['bin/torrent_parser'],
 
     install_requires=[
         "python-crontab >= 1.8",
