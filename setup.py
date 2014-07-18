@@ -22,5 +22,6 @@ setup(
         "python-crontab >= 1.8",
         "IMDbPY >= 5.0",
         "feedparser >= 5.1.3",
+        "requests >= 2.3.0",
     ],
 )

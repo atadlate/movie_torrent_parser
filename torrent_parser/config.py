@@ -15,6 +15,7 @@ status = "init"
 config = dict()
 default_log_file = os.path.join(os.path.dirname(sys.argv[0]), "parser_log.txt")
 file_log = ""
+logger = None
 
 def prompt_hidden(prompt):
     return getpass.getpass(prompt).strip()
@@ -188,11 +189,14 @@ def get_config():
     global status
     global default_log_file
     global file_log
+    global logger
 
     file_config = None
     file_log = None
     log_to_file = False
     background_mode = False
+    logger = logging.getLogger('torrent')
+    logger.setLevel(logging.INFO)
 
     usage = "Usage: python parser.py [ name_of_your_config_file ] [ -b ] [ -l log_file ]"
 
@@ -225,15 +229,14 @@ def get_config():
         if file_log is None:
             file_log = default_log_file
         try:
-            logging.basicConfig(filename=file_log, filemode='w', level=logging.INFO,
+            logging.basicConfig(filename=file_log, filemode='w',
                                 format='%(asctime)s - %(levelname)s - %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
         except:
             log_to_file=False
 
     if not log_to_file:
         file_log = ""
-        logging.basicConfig(level=logging.INFO,
-                            format='%(asctime)s - %(levelname)s - %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
+        logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
 
     if file_config is not None:
         if os.path.exists(file_config):
@@ -295,11 +298,11 @@ def console_log(text_content):
 def log_message(text_content, type='info'):
 
     if type == 'error':
-        logger = logging.error
+        log_met = logger.error
     else:
-        logger = logging.info
+        log_met = logger.info
 
     if not isinstance(text_content, unicode):
         text_content = unicode(text_content, 'utf-8')
 
-    logger(text_content.strip().encode('utf-8'))
+    log_met(text_content.strip().encode('utf-8'))

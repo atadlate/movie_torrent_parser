@@ -7,7 +7,7 @@ import signal
 from time import sleep
 from collections import OrderedDict
 import threading
-
+import requests
 import unicodedata
 from StringIO import StringIO
 from imdb import IMDb
@@ -30,8 +30,10 @@ feed_urls = [
     "http://kickass.to/movies/?rss=1",
 
     # Kickass 'Lime torrents' tag
-    "http://www.limetorrents.com/rss/16/",
+    "http://www.limetorrenmts.com/rss/16/",
     ]
+
+magnet_converter_url = 'http://magnet2torrent.com/upload/'
 
 title_specification = [
     ('SEP1',  r'\[.+?\]'),
@@ -365,6 +367,32 @@ def get_imdb_info(properties):
 
     return
 
+def magnet_to_torrent(torrent_magnet_url):
+    payload = {'magnet': torrent_magnet_url}
+    headers = {'content-type': 'application/x-www-form-urlencoded'}
+    http_url = torrent_magnet_url
+    try:
+        r = requests.post(magnet_converter_url, data=payload, headers=headers, allow_redirects=False)
+        # The site will reply with a temporary redirection to the torrent file. However the URL to which we are
+        # redirected won't serve anything unless a GET is fired immediately after the redirect.
+        if r.status_code == 302:
+            http_url = r.headers['location']
+            headers = {
+                'host': 'torrage.com',
+                'user-agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:30.0) Gecko/20100101 Firefox/30.0',
+                'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'accept-language': 'en-US,en;q=0.5',
+                'accept-encoding': 'gzip, deflate',
+                'referer': 'http://magnet2torrent.com/',
+                'connection': 'keep-alive',
+            }
+            r = requests.get(http_url, headers=headers)
+
+    except:
+        http_url = torrent_magnet_url
+
+    return http_url
+
 def parse_feed():
 
     list_movie = dict()
@@ -381,6 +409,10 @@ def parse_feed():
             # Depending on feed source, link to torrent html page might be added. We're only interested in the link
             # to the torrent file itself, that should lie at the end of the list
             torrent_file_url = entry['links'][-1]['href']
+
+            # Converting magnet links to http url (some mail client discard magnet links in <a> tags)
+            if torrent_file_url[:7] == 'magnet:':
+                torrent_file_url = magnet_to_torrent(torrent_file_url)
 
             # Delay console prints if user is prompted for configuration
             if config.status == 'init':
